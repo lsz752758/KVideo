@@ -62,10 +62,18 @@ function PlayerContent() {
 
   // Parse grouped sources if available
   const groupedSources = useMemo<SourceInfo[]>(() => {
+    // Enrich each source with its baseUrl from the subscription store so the
+    // player speed test can ping a real URL (source ids/names are not URLs).
+    const storeSources = settingsStore.getSettings().sources || [];
+    const withBaseUrl = (s: SourceInfo): SourceInfo => {
+      const match = storeSources.find(v => v.id === s.source || v.name === s.sourceName);
+      return match ? { ...s, baseUrl: match.baseUrl } : s;
+    };
+
     let sources: SourceInfo[] = [];
     if (groupedSourcesParam) {
       try {
-        sources = JSON.parse(groupedSourcesParam);
+        sources = (JSON.parse(groupedSourcesParam) as SourceInfo[]).map(withBaseUrl);
       } catch {
         sources = [];
       }
@@ -73,12 +81,12 @@ function PlayerContent() {
 
     // Always ensure the current source is in the list
     if (source && !sources.find(s => s.source === source)) {
-      sources.unshift({
+      sources.unshift(withBaseUrl({
         id: videoId || '',
         source: source,
         sourceName: source,
         pic: videoData?.vod_pic
-      });
+      }));
     }
     return sources;
   }, [groupedSourcesParam, source, videoId, videoData?.vod_pic]);

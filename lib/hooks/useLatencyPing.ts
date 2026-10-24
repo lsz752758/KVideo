@@ -60,7 +60,9 @@ export function useLatencyPing({
 
             if (response.ok) {
                 const data = await response.json();
-                return data.latency || null;
+                // Only trust the measurement when the probe actually succeeded;
+                // timeouts/failures must not rank as a real latency.
+                return data.success === true ? (data.latency ?? null) : null;
             }
             return null;
         } catch {

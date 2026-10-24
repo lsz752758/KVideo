@@ -1,11 +1,29 @@
 /**
  * Ping API Route - Measures latency to video sources
- * Returns response time for real-time latency display
+ * Probes the source API itself ({baseUrl}?ac=list) instead of the bare root
+ * address, so the measured latency reflects the actual search/play path.
+ * Only HTTP completion + elapsed time are used; the response body is never parsed.
+ * Returns { latency, success } (success=false on timeout/failure).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'edge';
+
+const TIMEOUT_MS = 5000;
+
+async function timedGet(target: string, timeoutMs: number): Promise<void> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        await fetch(target, {
+            method: 'GET',
+            signal: controller.signal,
+        });
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
 
 export async function POST(request: NextRequest) {
     try {
@@ -17,50 +35,33 @@ export async function POST(request: NextRequest) {
         }
 
         // Validate URL format
+        let base: URL;
         try {
-            new URL(url);
+            base = new URL(url);
         } catch {
             return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 });
         }
 
+        // Probe the API list endpoint (lightweight, no search term needed)
+        const probe = new URL(base.toString());
+        probe.searchParams.set('ac', 'list');
+
         const startTime = performance.now();
 
         try {
-            // Use HEAD request for faster ping (less data transfer)
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
-
-            await fetch(url, {
-                method: 'HEAD',
-                signal: controller.signal,
-                mode: 'no-cors', // Allow cross-origin requests
-            });
-
-            clearTimeout(timeoutId);
-
-            const endTime = performance.now();
-            const latency = Math.round(endTime - startTime);
-
+            await timedGet(probe.toString(), TIMEOUT_MS);
+            const latency = Math.round(performance.now() - startTime);
             return NextResponse.json({ latency, success: true });
-        } catch (fetchError) {
-            // If HEAD fails, try GET with timeout
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
-
+        } catch {
+            // API probe failed: fall back to the bare root address so a source
+            // whose list endpoint is blocked still reports reachability.
             try {
-                await fetch(url, {
-                    method: 'GET',
-                    signal: controller.signal,
-                });
-                clearTimeout(timeoutId);
-
-                const endTime = performance.now();
-                const latency = Math.round(endTime - startTime);
-                return NextResponse.json({ latency, success: true });
+                const fallbackStart = performance.now();
+                await timedGet(base.toString(), TIMEOUT_MS);
+                const latency = Math.round(performance.now() - fallbackStart);
+                return NextResponse.json({ latency, success: true, fallback: true });
             } catch {
-                clearTimeout(timeoutId);
-                const endTime = performance.now();
-                const latency = Math.round(endTime - startTime);
+                const latency = Math.round(performance.now() - startTime);
                 // Still return latency even on error (timeout = slow)
                 return NextResponse.json({ latency, success: false, timeout: true });
             }

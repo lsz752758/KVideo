@@ -17,6 +17,7 @@ export interface SourceInfo {
     id: string | number;
     source: string;
     sourceName?: string;
+    baseUrl?: string;
     latency?: number;
     pic?: string;
 }
@@ -52,19 +53,27 @@ export function SourceSelector({
 
         const results = await Promise.all(
             sources.map(async (source) => {
+                // Only ping when we have a real baseUrl; the source id/name is not a URL
+                // and would always fail validation on the server.
+                if (!source.baseUrl) {
+                    return { source: source.source, latency: undefined };
+                }
                 try {
-                    // Use the stored baseUrl or extract from source
                     const response = await fetch('/api/ping', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            url: source.source, // This should be the baseUrl ideally
+                            url: source.baseUrl,
                         }),
                     });
 
                     if (response.ok) {
                         const data = await response.json();
-                        return { source: source.source, latency: data.latency };
+                        // Only trust the measurement when the probe actually succeeded;
+                        // timeouts/failures must sink to the bottom, not rank as slow.
+                        if (data.success === true && typeof data.latency === 'number') {
+                            return { source: source.source, latency: data.latency };
+                        }
                     }
                 } catch {
                     // Ignore errors
