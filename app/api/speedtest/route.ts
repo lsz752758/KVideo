@@ -23,14 +23,19 @@ async function probeSource(baseUrl: string): Promise<number | null> {
         return null;
     }
 
+    // Only a 2xx answer counts: the edge runtime can return synthetic
+    // responses for dead hosts, so mere completion is not enough.
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
     const start = performance.now();
     try {
-        await fetch(probe, {
+        const res = await fetch(probe, {
             method: 'GET',
             signal: controller.signal,
         });
+        if (res.status < 200 || res.status >= 300) {
+            return null;
+        }
         return Math.round(performance.now() - start);
     } catch {
         return null;
