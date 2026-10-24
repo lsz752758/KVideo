@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SourceManager } from '@/components/settings/SourceManager';
 import type { VideoSource } from '@/lib/types';
 import { DEFAULT_SOURCES } from '@/lib/api/default-sources';
+import { settingsStore, SPEED_TEST_TTL_MS } from '@/lib/store/settings-store';
 
 interface SourceSettingsProps {
     sources: VideoSource[];
@@ -20,6 +21,72 @@ export function SourceSettings({
 }: SourceSettingsProps) {
     const [showAllSources, setShowAllSources] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [speeds, setSpeeds] = useState<Record<string, number | null>>({});
+    const [speedTestedAt, setSpeedTestedAt] = useState<number | null>(null);
+    const [sortBySpeed, setSortBySpeed] = useState(false);
+    const [speedTesting, setSpeedTesting] = useState(false);
+
+    // Load previously measured speeds + sort toggle (local only, never written
+    // back to the subscription file).
+    useEffect(() => {
+        const settings = settingsStore.getSettings();
+        setSpeeds(settings.sourceSpeeds || {});
+        setSpeedTestedAt(settings.speedTestedAt ?? null);
+        setSortBySpeed(settings.sortBySpeed === true);
+    }, []);
+
+    const speedsExpired = speedTestedAt !== null &&
+        Date.now() - speedTestedAt > SPEED_TEST_TTL_MS;
+
+    const handleSpeedTestAll = async () => {
+        if (speedTesting || sources.length === 0) return;
+        setSpeedTesting(true);
+        try {
+            const response = await fetch('/api/speedtest', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sources: sources.map(s => ({ id: s.id, baseUrl: s.baseUrl })),
+                }),
+            });
+            if (!response.ok) return;
+            const data = await response.json();
+            const next: Record<string, number | null> = {};
+            (data.results || []).forEach((r: { id: string; ms: number | null }) => {
+                next[r.id] = r.ms;
+            });
+            const testedAt = Date.now();
+            setSpeeds(next);
+            setSpeedTestedAt(testedAt);
+            settingsStore.saveSettings({
+                ...settingsStore.getSettings(),
+                sourceSpeeds: next,
+                speedTestedAt: testedAt,
+            });
+
+            // Re-order the local source list by measured speed (failures last).
+            // This only changes the local stored order, never the subscription file.
+            const rank = (s: VideoSource) => {
+                const ms = next[s.id];
+                return ms === undefined || ms === null ? Infinity : ms;
+            };
+            const sorted = [...sources].sort((a, b) => rank(a) - rank(b));
+            sorted.forEach((s, idx) => { s.priority = idx + 1; });
+            onSourcesChange(sorted);
+        } catch {
+            // Speed test failure must not touch the source list itself.
+        } finally {
+            setSpeedTesting(false);
+        }
+    };
+
+    const handleSortBySpeedToggle = (enabled: boolean) => {
+        setSortBySpeed(enabled);
+        settingsStore.saveSettings({
+            ...settingsStore.getSettings(),
+            sortBySpeed: enabled,
+        });
+    };
 
     const filteredSources = sources.filter(source =>
         source.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -63,6 +130,13 @@ export function SourceSettings({
                 <h2 className="text-xl font-semibold text-[var(--text-color)]">视频源管理</h2>
                 <div className="flex gap-2">
                     <button
+                        onClick={handleSpeedTestAll}
+                        disabled={speedTesting}
+                        className="px-4 py-2 rounded-[var(--radius-2xl)] bg-[var(--glass-bg)] border border-[var(--glass-border)] text-[var(--text-color)] text-sm font-medium hover:bg-[color-mix(in_srgb,var(--accent-color)_10%,transparent)] transition-all duration-200 cursor-pointer disabled:opacity-50"
+                    >
+                        {speedTesting ? '测速中...' : '全部测速'}
+                    </button>
+                    <button
                         onClick={onRestoreDefaults}
                         className="px-4 py-2 rounded-[var(--radius-2xl)] bg-[var(--glass-bg)] border border-[var(--glass-border)] text-[var(--text-color)] text-sm font-medium hover:bg-[color-mix(in_srgb,var(--accent-color)_10%,transparent)] transition-all duration-200 cursor-pointer"
                     >
@@ -79,6 +153,26 @@ export function SourceSettings({
             <p className="text-sm text-[var(--text-color-secondary)] mb-6">
                 管理视频来源，调整优先级和启用状态
             </p>
+
+            {/* Speed test: sort toggle + expiry hint (local only) */}
+            <div className="flex flex-wrap items-center gap-4 mb-4">
+                <label className="flex items-center gap-2 text-sm text-[var(--text-color)] cursor-pointer">
+                    <input
+                        type="checkbox"
+                        checked={sortBySpeed}
+                        onChange={(e) => handleSortBySpeedToggle(e.target.checked)}
+                        className="w-4 h-4 accent-[var(--accent-color)]"
+                    />
+                    按速度排序（搜索与播放默认按本地测速顺序排源）
+                </label>
+                {speedTestedAt !== null && (
+                    <span className={`text-xs ${speedsExpired ? 'text-orange-500' : 'text-[var(--text-color-secondary)]'}`}>
+                        {speedsExpired
+                            ? '测速结果已过期，建议重新测速'
+                            : `测速于 ${new Date(speedTestedAt).toLocaleString()}`}
+                    </span>
+                )}
+            </div>
 
             {/* Search Bar */}
             <div className="relative mb-4">
@@ -106,6 +200,8 @@ export function SourceSettings({
                 onReorder={handleReorder}
                 onEdit={onEditSource}
                 defaultIds={DEFAULT_SOURCES.map(s => s.id)}
+                speeds={speeds}
+                speedsExpired={speedsExpired}
             />
             {!searchQuery && sources.length > 10 && (
                 <button

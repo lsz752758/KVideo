@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Icons } from '@/components/ui/Icon';
 import { LatencyBadge } from '@/components/ui/LatencyBadge';
 import { Button } from '@/components/ui/Button';
+import { settingsStore, SPEED_TEST_TTL_MS } from '@/lib/store/settings-store';
 
 export interface SourceInfo {
     id: string | number;
@@ -93,7 +94,9 @@ export function SourceSelector({
         setIsLoading(false);
     }, [sources]);
 
-    // Initialize latencies from sources
+    // Initialize latencies from sources. When "sort by speed" is on and the
+    // cached measurement is fresh, prefer it over the search-time latency so
+    // the list opens pre-sorted without pressing refresh.
     useEffect(() => {
         const initial: Record<string, number> = {};
         sources.forEach(s => {
@@ -101,6 +104,23 @@ export function SourceSelector({
                 initial[s.source] = s.latency;
             }
         });
+        try {
+            const settings = settingsStore.getSettings();
+            if (
+                settings.sortBySpeed &&
+                settings.speedTestedAt !== null &&
+                Date.now() - settings.speedTestedAt < SPEED_TEST_TTL_MS
+            ) {
+                sources.forEach(s => {
+                    const ms = settings.sourceSpeeds?.[s.source];
+                    if (typeof ms === 'number') {
+                        initial[s.source] = ms;
+                    }
+                });
+            }
+        } catch {
+            // Ignore settings read errors; fall back to search-time latencies.
+        }
         setLatencies(initial);
     }, [sources]);
 

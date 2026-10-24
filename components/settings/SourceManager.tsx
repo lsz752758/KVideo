@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { VideoSource } from '@/lib/types';
+import { LatencyBadge } from '@/components/ui/LatencyBadge';
 
 interface SourceManagerProps {
   sources: VideoSource[];
@@ -10,6 +11,10 @@ interface SourceManagerProps {
   onReorder: (id: string, direction: 'up' | 'down') => void;
   onEdit?: (source: VideoSource) => void;
   defaultIds: string[];
+  // Local speed test results (source id -> ms, null = timeout/failed).
+  speeds?: Record<string, number | null>;
+  // When true, badges render greyed out to signal expired results.
+  speedsExpired?: boolean;
 }
 
 export function SourceManager({
@@ -18,7 +23,9 @@ export function SourceManager({
   onDelete,
   onReorder,
   onEdit,
-  defaultIds
+  defaultIds,
+  speeds = {},
+  speedsExpired = false
 }: SourceManagerProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -63,8 +70,18 @@ export function SourceManager({
 
               {/* Source Info */}
               <div className="flex-1 min-w-0">
-                <div className="font-semibold text-[var(--text-color)] truncate">
-                  {source.name}
+                <div className="font-semibold text-[var(--text-color)] truncate flex items-center gap-2">
+                  <span className="truncate">{source.name}</span>
+                  {speeds[source.id] !== undefined && (
+                    speeds[source.id] === null ? (
+                      <span className="text-xs text-gray-400 flex-shrink-0">超时</span>
+                    ) : (
+                      <LatencyBadge
+                        latency={speeds[source.id] as number}
+                        className={speedsExpired ? 'opacity-40' : ''}
+                      />
+                    )
+                  )}
                 </div>
                 <div className="text-sm text-[var(--text-color-secondary)] truncate">
                   {source.baseUrl}

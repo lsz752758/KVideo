@@ -47,7 +47,15 @@ export interface AppSettings {
   fullscreenType: 'native' | 'window'; // Fullscreen mode preference
   proxyMode: ProxyMode; // Proxy behavior: 'retry' | 'none' | 'always'
   rememberScrollPosition: boolean; // Remember scroll position when navigating back or refreshing
+  // Local source speed test results (never written back to the subscription file)
+  sourceSpeeds: Record<string, number | null>; // source id -> ms (null = timeout/failed)
+  speedTestedAt: number | null; // timestamp ms of the last full speed test
+  sortBySpeed: boolean; // When on, search/player prefer the local speed order
 }
+
+// Speed test results stay valid for 24 hours; older results are shown greyed
+// out and the UI prompts for a re-test.
+export const SPEED_TEST_TTL_MS = 24 * 60 * 60 * 1000;
 
 import { exportSettings, importSettings, SEARCH_HISTORY_KEY, WATCH_HISTORY_KEY } from './settings-helpers';
 
@@ -121,6 +129,9 @@ function getDefaultAppSettings(): AppSettings {
     fullscreenType: 'native',
     proxyMode: 'retry',
     rememberScrollPosition: true,
+    sourceSpeeds: {},
+    speedTestedAt: null,
+    sortBySpeed: false,
   };
 }
 
@@ -199,6 +210,9 @@ export const settingsStore = {
         fullscreenType: parsed.fullscreenType === 'window' ? 'window' : 'native',
         proxyMode: (parsed.proxyMode === 'retry' || parsed.proxyMode === 'none' || parsed.proxyMode === 'always') ? parsed.proxyMode : 'retry',
         rememberScrollPosition: parsed.rememberScrollPosition !== undefined ? parsed.rememberScrollPosition : true,
+        sourceSpeeds: (parsed.sourceSpeeds && typeof parsed.sourceSpeeds === 'object' && !Array.isArray(parsed.sourceSpeeds)) ? parsed.sourceSpeeds : {},
+        speedTestedAt: typeof parsed.speedTestedAt === 'number' ? parsed.speedTestedAt : null,
+        sortBySpeed: parsed.sortBySpeed === true,
       };
     } catch {
       // Even if localStorage fails, we should return defaults + ENV subscriptions

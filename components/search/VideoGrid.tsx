@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, useMemo, memo, useEffect } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { VideoCard } from './VideoCard';
 import { VideoGroupCard, GroupedVideo } from './VideoGroupCard';
-import { settingsStore } from '@/lib/store/settings-store';
+import { settingsStore, SPEED_TEST_TTL_MS } from '@/lib/store/settings-store';
 import { Video } from '@/lib/types';
 
 interface VideoGridProps {
@@ -23,6 +23,19 @@ export const VideoGrid = memo(function VideoGrid({
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(24);
   const [displayMode, setDisplayMode] = useState<'normal' | 'grouped'>('normal');
+  // Local speed-test order (from settings; refreshed via the store subscription).
+  const [speedOrder, setSpeedOrder] = useState<{
+    enabled: boolean;
+    speeds: Record<string, number | null>;
+    testedAt: number | null;
+  }>(() => {
+    const s = settingsStore.getSettings();
+    return {
+      enabled: s.sortBySpeed === true,
+      speeds: s.sourceSpeeds || {},
+      testedAt: s.speedTestedAt ?? null,
+    };
+  });
   const gridRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const pathname = usePathname();
@@ -64,6 +77,11 @@ export const VideoGrid = memo(function VideoGrid({
     const unsubscribe = settingsStore.subscribe(() => {
       const newSettings = settingsStore.getSettings();
       setDisplayMode(newSettings.searchDisplayMode);
+      setSpeedOrder({
+        enabled: newSettings.sortBySpeed === true,
+        speeds: newSettings.sourceSpeeds || {},
+        testedAt: newSettings.speedTestedAt ?? null,
+      });
     });
 
     return () => unsubscribe();
@@ -72,6 +90,17 @@ export const VideoGrid = memo(function VideoGrid({
   if (videos.length === 0) {
     return null;
   }
+
+  // Whether the local speed order is active (toggle on + fresh measurement).
+  const useSpeedOrder = speedOrder.enabled &&
+    speedOrder.testedAt !== null &&
+    Date.now() - speedOrder.testedAt < SPEED_TEST_TTL_MS;
+
+  // Rank a video's source by measured speed (failures/unmeasured sink last).
+  const speedRank = (sourceId: string): number => {
+    const ms = speedOrder.speeds[sourceId];
+    return ms === undefined || ms === null ? Infinity : ms;
+  };
 
   // Group videos by name when in grouped mode
   const groupedVideos = useMemo<GroupedVideo[]>(() => {
@@ -88,8 +117,13 @@ export const VideoGrid = memo(function VideoGrid({
     });
 
     return Array.from(groups.entries()).map(([, groupVideos]) => {
-      // Sort by latency (lowest first) 
       const sorted = [...groupVideos].sort((a, b) => {
+        // With the speed toggle on, measured source speed wins; ties and
+        // unmeasured sources fall back to the search-time latency order.
+        if (useSpeedOrder) {
+          const rankDiff = speedRank(a.source) - speedRank(b.source);
+          if (rankDiff !== 0) return rankDiff;
+        }
         if (a.latency === undefined) return 1;
         if (b.latency === undefined) return -1;
         return a.latency - b.latency;
@@ -101,7 +135,7 @@ export const VideoGrid = memo(function VideoGrid({
         name: sorted[0].vod_name,
       };
     });
-  }, [videos, displayMode]);
+  }, [videos, displayMode, speedOrder, useSpeedOrder]);
 
   // Callback ref for the load more trigger
   const loadMoreRef = useCallback((node: HTMLDivElement | null) => {
@@ -136,7 +170,13 @@ export const VideoGrid = memo(function VideoGrid({
   const videoItems = useMemo(() => {
     if (displayMode === 'grouped') return [];
 
-    return videos.map((video, index) => {
+    // With the speed toggle on, order the flat list by measured source speed
+    // (stable sort keeps the original order for ties/unmeasured sources).
+    const orderedVideos = useSpeedOrder
+      ? [...videos].sort((a, b) => speedRank(a.source) - speedRank(b.source))
+      : videos;
+
+    return orderedVideos.map((video, index) => {
       const params: Record<string, string> = {
         id: String(video.vod_id),
         source: video.source,
@@ -153,7 +193,7 @@ export const VideoGrid = memo(function VideoGrid({
 
       return { video, videoUrl, cardId };
     });
-  }, [videos, displayMode, isPremium]);
+  }, [videos, displayMode, isPremium, speedOrder, useSpeedOrder]);
 
   // Grouped mode items
   const groupItems = useMemo(() => {
