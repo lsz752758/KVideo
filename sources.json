@@ -388,7 +388,7 @@
         "name": "百万资源",
         "baseUrl": "https://api.bwzyz.com/api.php/provide/vod",
         "group": "premium",
-        "enabled": true,
+        "enabled": false,
         "priority": 49
     },
     {
@@ -460,7 +460,111 @@
         "name": "细胞采集",
         "baseUrl": "https://www.xxibaozyw.com/api.php/provide/vod",
         "group": "premium",
-        "enabled": true,
+        "enabled": false,
         "priority": 58
+    },
+    {
+        "id": "yutu2",
+        "name": "玉兔资源2",
+        "baseUrl": "https://apiyutu.com/api.php/provide/vod",
+        "group": "premium",
+        "enabled": true,
+        "priority": 59
+    },
+    {
+        "id": "hsck2",
+        "name": "黄色仓库2",
+        "baseUrl": "https://hsckzy.xyz/api.php/provide/vod",
+        "group": "premium",
+        "enabled": true,
+        "priority": 60
+    },
+    {
+        "id": "danaizi",
+        "name": "大奶子资源",
+        "baseUrl": "https://apidanaizi.com/api.php/provide/vod",
+        "group": "premium",
+        "enabled": true,
+        "priority": 61
+    },
+    {
+        "id": "senlin2",
+        "name": "森林资源（备用）",
+        "baseUrl": "https://beiyong.slapibf.com/api.php/provide/vod",
+        "group": "premium",
+        "enabled": true,
+        "priority": 62
+    },
+    {
+        "id": "lajiao",
+        "name": "辣椒资源",
+        "baseUrl": "https://apilj.com/api.php/provide/vod",
+        "group": "premium",
+        "enabled": true,
+        "priority": 63
+    },
+    {
+        "id": "doudou",
+        "name": "豆豆资源",
+        "baseUrl": "https://api.douapi.cc/api.php/provide/vod",
+        "group": "premium",
+        "enabled": true,
+        "priority": 64
+    },
+    {
+        "id": "didi",
+        "name": "滴滴资源",
+        "baseUrl": "https://api.ddapi.cc/api.php/provide/vod",
+        "group": "premium",
+        "enabled": true,
+        "priority": 65
+    },
+    {
+        "id": "heiliao",
+        "name": "黑料资源",
+        "baseUrl": "https://www.heiliaozyapi.com/api.php/provide/vod",
+        "group": "premium",
+        "enabled": true,
+        "priority": 66
+    },
+    {
+        "id": "taohua",
+        "name": "桃花资源",
+        "baseUrl": "https://thzy1.me/api.php/provide/vod",
+        "group": "premium",
+        "enabled": true,
+        "priority": 67
+    },
+    {
+        "id": "ck2",
+        "name": "CK资源2",
+        "baseUrl": "https://ckzy.me/api.php/provide/vod",
+        "group": "premium",
+        "enabled": true,
+        "priority": 68
+    },
+    {
+        "id": "souav",
+        "name": "souav资源",
+        "baseUrl": "https://api.souavzyw.net/api.php/provide/vod",
+        "group": "premium",
+        "enabled": true,
+        "priority": 69
+    },
+    {
+        "id": "xingba",
+        "name": "杏吧资源",
+        "baseUrl": "https://xingba222.com/api.php/provide/vod",
+        "group": "premium",
+        "enabled": true,
+        "priority": 70
+    },
+    {
+        "id": "semao",
+        "name": "色猫资源",
+        "baseUrl": "https://caiji.semaozy.net/inc/apijson_vod.php/provide/vod",
+        "group": "premium",
+        "enabled": true,
+        "priority": 71
     }
 ]
