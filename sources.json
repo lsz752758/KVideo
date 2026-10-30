@@ -566,5 +566,13 @@
         "group": "premium",
         "enabled": true,
         "priority": 71
+    },
+    {
+        "id": "missav",
+        "name": "MissAV",
+        "baseUrl": "https://8080-agqyb5xc6ey3o6mtw23q7insiy.instabox.tech",
+        "group": "premium",
+        "enabled": true,
+        "priority": 72
     }
 ]
